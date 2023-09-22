@@ -33,6 +33,9 @@ def handle_text(message):
     if "Лена, прекрати" in message_text:
         bot.send_message(message.chat.id, "Лена, сколько можно?🤬")
 
+    if "собраться" in message_text:
+        bot.send_message(message.chat.id, "ахахахаха, что за мысли такие?😂😂😂")
+
     if "работа" in message_text or "работе" in message_text:
         bot.send_message(message.chat.id, "@prezenslimited")
 
