@@ -19,6 +19,13 @@ jobs:
         uses: android-actions/setup-android@v3
       - name: Gradle Wrapper Validation
         uses: gradle/actions/wrapper-validation@v4
+      - name: Set sdk.dir
+        working-directory: android
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug
