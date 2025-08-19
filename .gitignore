@@ -1,0 +1,28 @@
+# General
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node
+node_modules/
+
+# Gradle / Android
+.gradle/
+**/build/
+/local.properties
+/.idea/
+**/.cxx/
+**/.externalNativeBuild/
+**/*.iml
+captures/
+
+# Keystores
+*.jks
+*.keystore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
