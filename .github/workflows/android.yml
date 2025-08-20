@@ -1,42 +1,94 @@
-name: Android CI
+name: Android Build & Publish
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
+    branches: [ main, master ]
 
+# Отключаем запуск на PR, если только это не нужно для проверки
+# Убираем дублирование веток
 jobs:
   build:
+    name: Build Debug APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Разрешение для создания релиза
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Полная история для кэша
+
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
-      - name: Set up Android SDK
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'  # Кэширование Gradle
+
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Gradle Wrapper Validation
-        uses: gradle/actions/wrapper-validation@v4
-      - name: Set sdk.dir
-        working-directory: android
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Make gradlew executable
+        working-directory: ./android
+        run: chmod +x ./gradlew
+
       - name: Build Debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
-      - name: List APK outputs
+        working-directory: ./android
+        run: ./gradlew assembleDebug --no-daemon --warning-mode=all
+
+      - name: Verify APK exists
+        working-directory: ./android
         run: |
-          ls -R android/app/build/outputs || true
-          find android/app/build/outputs -name "*.apk" -ls || true
-      - name: Upload APK
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "✅ APK successfully built: $APK_PATH"
+            ls -la "app/build/outputs/apk/debug/"
+          else
+            echo "❌ APK not found!"
+            find . -name "*.apk" -ls
+            exit 1
+          fi
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/**/*.apk
+          name: mama-bot-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7  # Автоочистка через неделю
+
+      - name: Get APK info
+        working-directory: ./android
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          echo "📦 APK Information:"
+          echo "Size: $(du -h "$APK_PATH" | cut -f1)"
+          echo "Build time: $(date -r "$APK_PATH")"
+
+      # Автоматически создает релиз с APK при пуше в main
+      - name: Create Release with APK
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: build-${{ github.run_number }}
+          name: Build #${{ github.run_number }}
+          body: |
+            🤖 Automated APK build
+            - Commit: ${{ github.sha }}
+            - Build: #${{ github.run_number }}
+            - Date: ${{ github.event.head_commit.timestamp }}
+          draft: false
+          prerelease: false
